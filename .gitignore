@@ -1,0 +1,6 @@
+logs/
+node_modules/
+package.json
+package-lock.json
+temps.csv
+token.pickle
