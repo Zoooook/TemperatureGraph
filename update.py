@@ -31,19 +31,22 @@ while True:
             break
 
     currentDay = currentTime[:10]
+    with open('logs/' + currentDay + '.csv', 'a') as file:
+        file.write(','.join([currentTime] + temps) + '\n')
+
     if currentDay != lastDay:
         files = sorted(listdir('logs'))
         for f in files[:-30]:
             remove('logs/' + f)
 
         sheetData = []
-        for f in files[-7:]:
+        for f in files[-8:]:
             with open('logs/' + f, 'r') as file:
                 csvData = reader(file)
                 for row in csvData:
                     sheetData.append(row)
         rowNum = len(sheetData) + 1
-        sheetData.extend([[''] * 9] * (11520-len(sheetData)))
+        sheetData.extend([[''] * 9] * (60*24*8-len(sheetData)))
 
         service.spreadsheets().values().update(
             spreadsheetId = '1aVMGkidtztSjkal5Jac5daZT2WNvGbUIjD6Hr2SwaWM',
@@ -54,8 +57,6 @@ while True:
 
         lastDay = currentDay
 
-    with open('logs/' + currentDay + '.csv', 'a') as file:
-        file.write(','.join([currentTime] + temps) + '\n')
     sheetData = [[currentTime] + temps]
     rowNum += 1
 
