@@ -13,6 +13,17 @@ service = build('sheets', 'v4', credentials=creds)
 if not exists('logs/'):
     mkdir('logs/')
 
+def updateSheet(startRow, data):
+    service.spreadsheets().values().update(
+        spreadsheetId = '1aVMGkidtztSjkal5Jac5daZT2WNvGbUIjD6Hr2SwaWM',
+        valueInputOption = 'USER_ENTERED',
+        range = 'Data!B' + str(startRow) + ':J',
+        body = {'majorDimension': 'ROWS', 'values': data},
+    ).execute()
+
+def smooth(data):
+    return data
+
 lastTime = 0
 lastDay = 0
 rowNum = 0
@@ -31,38 +42,57 @@ while True:
             break
 
     currentDay = currentTime[:10]
-    with open('logs/' + currentDay + '.csv', 'a') as file:
-        file.write(','.join([currentTime] + temps) + '\n')
+    currentDatetime = datetime.datetime.strptime(currentTime, '%Y-%m-%d %H:%M')
 
     if currentDay != lastDay:
         files = sorted(listdir('logs'))
         for f in files[:-30]:
             remove('logs/' + f)
 
-        sheetData = []
-        for f in files[-8:]:
+        tempData = [None,{},{},{},{},{},{},{},{}]
+        times = set()
+        for f in files[-9:]:
             with open('logs/' + f, 'r') as file:
                 csvData = reader(file)
                 for row in csvData:
-                    sheetData.append(row)
+                    timeKey =  datetime.datetime.strptime(row[0], '%Y-%m-%d %H:%M')
+                    times.add(timeKey)
+                    for i in range(1,9):
+                        try:
+                            tempData[i][timeKey] = round(float(row[i]), 2)
+                        except ValueError:
+                            pass
+
+        smoothData = smooth(tempData)
+        sheetData = []
+        t = currentDatetime.replace(hour=0, minute=0) - datetime.timedelta(days=7)
+        while t < currentDatetime:
+            if t in times:
+                row = [t.strftime('%Y-%m-%d %H:%M')]
+                for i in range(1,9):
+                    if t in smoothData[i]:
+                        row.append(str(smoothData[i][t]))
+                    else:
+                        row.append('')
+                sheetData.append(row)
+            t += datetime.timedelta(minutes=1)
+
         rowNum = len(sheetData) + 1
         sheetData.extend([[''] * 9] * (60*24*8-len(sheetData)))
-
-        service.spreadsheets().values().update(
-            spreadsheetId = '1aVMGkidtztSjkal5Jac5daZT2WNvGbUIjD6Hr2SwaWM',
-            valueInputOption = 'USER_ENTERED',
-            range = 'Data!B2:J',
-            body = {'majorDimension': 'ROWS', 'values': sheetData},
-        ).execute()
-
+        updateSheet(2, sheetData)
         lastDay = currentDay
 
-    sheetData = [[currentTime] + temps]
-    rowNum += 1
+    if currentDatetime in times:
+        continue
 
-    service.spreadsheets().values().update(
-        spreadsheetId = '1aVMGkidtztSjkal5Jac5daZT2WNvGbUIjD6Hr2SwaWM',
-        valueInputOption = 'USER_ENTERED',
-        range = 'Data!B' + str(rowNum) + ':J',
-        body = {'majorDimension': 'ROWS', 'values': sheetData},
-    ).execute()
+    row = [currentTime] + temps
+    with open('logs/' + currentDay + '.csv', 'a') as file:
+        file.write(','.join(row) + '\n')
+    for i in range(1,9):
+        try:
+            tempData[i][currentDatetime] = round(float(row[i]), 2)
+        except ValueError:
+            pass
+    sheetData = [row]
+    rowNum += 1
+    updateSheet(rowNum, sheetData)
