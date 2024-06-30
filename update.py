@@ -13,6 +13,41 @@ service = build('sheets', 'v4', credentials=creds)
 if not exists('logs/'):
     mkdir('logs/')
 
+def smooth(data, newData, times):
+    for t in times:
+        for i in range(1,9):
+            if t in data[i]:
+                total = data[i][t]
+                m = 1
+                tminus = t - datetime.timedelta(minutes=m)
+                tplus = t + datetime.timedelta(minutes=m)
+                while m <= 10 and \
+                      tminus in data[i] and \
+                      tplus in data[i] and \
+                      abs(data[i][t] - data[i][tminus]) < .2 and \
+                      abs(data[i][t] - data[i][tplus]) < .2:
+                    total += data[i][tminus] + data[i][tplus]
+                    m += 1
+                    tminus = t - datetime.timedelta(minutes=m)
+                    tplus = t + datetime.timedelta(minutes=m)
+                newData[i][t] = round(total / (2*m-1), 3)
+    return newData
+
+def buildSheetData(data, times, minDatetime, maxDatetime):
+    sheetData = []
+    t = minDatetime
+    while t <= maxDatetime:
+        if t in times:
+            row = [t.strftime('%Y-%m-%d %H:%M')]
+            for i in range(1,9):
+                if t in data[i]:
+                    row.append(str(data[i][t]))
+                else:
+                    row.append('')
+            sheetData.append(row)
+        t += datetime.timedelta(minutes=1)
+    return sheetData
+
 def updateSheet(startRow, data):
     service.spreadsheets().values().update(
         spreadsheetId = '1aVMGkidtztSjkal5Jac5daZT2WNvGbUIjD6Hr2SwaWM',
@@ -21,12 +56,8 @@ def updateSheet(startRow, data):
         body = {'majorDimension': 'ROWS', 'values': data},
     ).execute()
 
-def smooth(data):
-    return data
-
 lastTime = 0
 lastDay = 0
-rowNum = 0
 while True:
     currentTime = str(datetime.datetime.now())[:16]
     if currentTime == lastTime:
@@ -46,6 +77,7 @@ while True:
 
     if currentDay != lastDay:
         files = sorted(listdir('logs'))
+
         for f in files[:-30]:
             remove('logs/' + f)
 
@@ -63,19 +95,10 @@ while True:
                         except ValueError:
                             pass
 
-        smoothData = smooth(tempData)
-        sheetData = []
-        t = currentDatetime.replace(hour=0, minute=0) - datetime.timedelta(days=7)
-        while t < currentDatetime:
-            if t in times:
-                row = [t.strftime('%Y-%m-%d %H:%M')]
-                for i in range(1,9):
-                    if t in smoothData[i]:
-                        row.append(str(smoothData[i][t]))
-                    else:
-                        row.append('')
-                sheetData.append(row)
-            t += datetime.timedelta(minutes=1)
+        smoothData = [None,{},{},{},{},{},{},{},{}]
+        smooth(tempData, smoothData, sorted(list(times)))
+        minDatetime = currentDatetime.replace(hour=0, minute=0) - datetime.timedelta(days=7)
+        sheetData = buildSheetData(smoothData, times, minDatetime, currentDatetime)
 
         rowNum = len(sheetData) + 1
         sheetData.extend([[''] * 9] * (60*24*8-len(sheetData)))
@@ -88,11 +111,15 @@ while True:
     row = [currentTime] + temps
     with open('logs/' + currentDay + '.csv', 'a') as file:
         file.write(','.join(row) + '\n')
+    times.add(currentDatetime)
     for i in range(1,9):
         try:
             tempData[i][currentDatetime] = round(float(row[i]), 2)
         except ValueError:
             pass
-    sheetData = [row]
+
+    smooth(tempData, smoothData, sorted(list(times))[-11:])
+    minDatetime = currentDatetime - datetime.timedelta(minutes=10)
+    sheetData = buildSheetData(smoothData, times, minDatetime, currentDatetime)
     rowNum += 1
-    updateSheet(rowNum, sheetData)
+    updateSheet(rowNum + 1 - len(sheetData), sheetData)
