@@ -31,7 +31,6 @@ def smooth(data, newData, times):
                     tminus = t - datetime.timedelta(minutes=m)
                     tplus = t + datetime.timedelta(minutes=m)
                 newData[i][t] = round(total / (2*m-1), 3)
-    return newData
 
 def buildSheetData(data, times, minDatetime, maxDatetime):
     sheetData = []
