@@ -93,11 +93,10 @@ while True:
     if currentDay != lastDay:
         files = sorted(listdir('logs'))
 
-        for f in files[:-32]:
-            remove('logs/' + f)
-
         averageData = []
-        for f in files[:-1]:
+        for f in files[-32:]:
+            if f == currentDay + '.csv':
+                continue
             totals = [None,0,0,0,0,0,0,0,0,0]
             counts = [None,0,0,0,0,0,0,0,0,0]
             with open('logs/' + f, 'r') as file:
@@ -117,6 +116,9 @@ while True:
                     averages.append('')
             averageData.append(averages)
         updateAverages(averageData)
+
+        for f in files[:-32]:
+            remove('logs/' + f)
 
         tempData = [None,{},{},{},{},{},{},{},{},{}]
         times = set()
