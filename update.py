@@ -31,8 +31,6 @@ def smooth(data, newData, times):
                     tminus = t - datetime.timedelta(minutes=m)
                     tplus = t + datetime.timedelta(minutes=m)
                 newData[i][t] = round(total / (2*m-1), 3)
-        if t in data[9]:
-            newData[9][t] = data[9][t]
 
 def buildSheetData(data, times, minDatetime, maxDatetime):
     sheetData = []
@@ -40,7 +38,7 @@ def buildSheetData(data, times, minDatetime, maxDatetime):
     while t <= maxDatetime:
         if t in times:
             row = [t.strftime('%Y-%m-%d %H:%M')]
-            for i in range(1,10):
+            for i in range(1,9):
                 if t in data[i]:
                     row.append(str(data[i][t]))
                 else:
@@ -50,20 +48,26 @@ def buildSheetData(data, times, minDatetime, maxDatetime):
     return sheetData
 
 def updateData(startRow, data):
-    service.spreadsheets().values().update(
-        spreadsheetId = '1aVMGkidtztSjkal5Jac5daZT2WNvGbUIjD6Hr2SwaWM',
-        valueInputOption = 'USER_ENTERED',
-        range = 'Data!B' + str(startRow) + ':K',
-        body = {'majorDimension': 'ROWS', 'values': data},
-    ).execute()
+    try:
+        service.spreadsheets().values().update(
+            spreadsheetId = '1aVMGkidtztSjkal5Jac5daZT2WNvGbUIjD6Hr2SwaWM',
+            valueInputOption = 'USER_ENTERED',
+            range = 'Data!B' + str(startRow) + ':J',
+            body = {'majorDimension': 'ROWS', 'values': data},
+        ).execute()
+    except:
+        pass
 
 def updateAverages(data):
-    service.spreadsheets().values().update(
-        spreadsheetId = '1aVMGkidtztSjkal5Jac5daZT2WNvGbUIjD6Hr2SwaWM',
-        valueInputOption = 'USER_ENTERED',
-        range = 'Averages!A2:J',
-        body = {'majorDimension': 'ROWS', 'values': data},
-    ).execute()
+    try:
+        service.spreadsheets().values().update(
+            spreadsheetId = '1aVMGkidtztSjkal5Jac5daZT2WNvGbUIjD6Hr2SwaWM',
+            valueInputOption = 'USER_ENTERED',
+            range = 'Averages!A2:I',
+            body = {'majorDimension': 'ROWS', 'values': data},
+        ).execute()
+    except:
+        pass
 
 lastTime = 0
 lastDay = 0
@@ -82,12 +86,6 @@ while True:
             break
 
     currentDay = currentTime[:10]
-    hour = int(currentTime[11:13])
-    minute = int(currentTime[14:])
-    if hour >= 3 and hour < 12:
-        temps.append('68')
-    else:
-        temps.append('69')
     currentDatetime = datetime.datetime.strptime(currentTime, '%Y-%m-%d %H:%M')
 
     if currentDay != lastDay:
@@ -100,16 +98,19 @@ while True:
             totals = [None,0,0,0,0,0,0,0,0,0]
             counts = [None,0,0,0,0,0,0,0,0,0]
             with open('logs/' + f, 'r') as file:
-                csvData = reader(file)
-                for row in csvData:
-                    for i in range(1,10):
-                        try:
-                            totals[i] += round(float(row[i]), 2)
-                            counts[i] += 1
-                        except ValueError:
-                            pass
+                try:
+                    csvData = reader(file)
+                    for row in csvData:
+                        for i in range(1,9):
+                            try:
+                                totals[i] += round(float(row[i]), 2)
+                                counts[i] += 1
+                            except ValueError:
+                                pass
+                except:
+                    continue
             averages = [f.split('.')[0]]
-            for i in range(1,10):
+            for i in range(1,9):
                 if counts[i]:
                     averages.append(str(round(totals[i]/counts[i], 3)))
                 else:
@@ -124,16 +125,19 @@ while True:
         times = set()
         for f in files[-9:]:
             with open('logs/' + f, 'r') as file:
-                csvData = reader(file)
-                for row in csvData:
-                    timeKey =  datetime.datetime.strptime(row[0], '%Y-%m-%d %H:%M')
-                    times.add(timeKey)
-                    for i in range(1,10):
-                        try:
-                            if i < len(row):
-                                tempData[i][timeKey] = round(float(row[i]), 2)
-                        except ValueError:
-                            pass
+                try:
+                    csvData = reader(file)
+                    for row in csvData:
+                        timeKey =  datetime.datetime.strptime(row[0], '%Y-%m-%d %H:%M')
+                        times.add(timeKey)
+                        for i in range(1,9):
+                            try:
+                                if i < len(row):
+                                    tempData[i][timeKey] = round(float(row[i]), 2)
+                            except ValueError:
+                                pass
+                except:
+                    continue
 
         smoothData = [None,{},{},{},{},{},{},{},{},{}]
         smooth(tempData, smoothData, sorted(list(times)))
@@ -141,7 +145,7 @@ while True:
         sheetData = buildSheetData(smoothData, times, minDatetime, currentDatetime)
 
         rowNum = len(sheetData) + 1
-        sheetData.extend([[''] * 10] * (60*24*8-len(sheetData)))
+        sheetData.extend([[''] * 9] * (60*24*8-len(sheetData)))
         updateData(2, sheetData)
         lastDay = currentDay
 
@@ -152,7 +156,7 @@ while True:
     with open('logs/' + currentDay + '.csv', 'a') as file:
         file.write(','.join(row) + '\n')
     times.add(currentDatetime)
-    for i in range(1,10):
+    for i in range(1,9):
         try:
             tempData[i][currentDatetime] = round(float(row[i]), 2)
         except ValueError:
